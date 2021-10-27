@@ -48,11 +48,11 @@ gx = [l for l in gxy]
 modelx =[]
 samex = []
 newT = open('/home/nxu03235/bli18 scripts/lookuptable_harmonic5_update.txt', 'w+' ) ##  new updated lookuptable
-modelx = [float(xVal) for xVal in gx if float(xVal) > x[0] or float(xVal) < x[-1]]
+modelx = [float(xVal) for xVal in gx if float(xVal) < x[0] and float(xVal) > x[-1]]
 newy_y = poly(modelx)
 sel =0
 for xVal in gx:
-    if float(xVal) < x[0] or float(xVal) > x[-1]:
+    if float(xVal) > x[0] or float(xVal) < x[-1]:
         newT.write(f'{str(xVal)}\t{gxy[xVal]}\n')
     else:
         if sel > 0:
@@ -61,15 +61,10 @@ for xVal in gx:
             for newx in modelx:
                 newT.write(f'{str(newx)}\t{newy_y[sel]}\n')
                 sel +=1
-
-
-
-
-
-#wryt = [newT.write(f'{str(new_x[num])}\t{str(new_y[num])}\n') for num in range(len(new_x))]
-
-
 newT.close()
+
+
+
 newT = open('/home/nxu03235/bli18 scripts/lookuptable_harmonic5_update.txt', 'r' )
 nxy = coords([j for j in newT.readlines()],-1)
 ny = [float(nxy[p]) for p in nxy]
@@ -87,6 +82,7 @@ plt.show()
 #if check != 'Y':
 #    print('Y not entered, update NOT saved')
 #    exit()
+
 
 
 
