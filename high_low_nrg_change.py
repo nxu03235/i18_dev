@@ -32,7 +32,7 @@ def findPitch(degree):
     return poly(degree)
     
 def findRoll(degree):
-    return degree*m+c  
+    return polyR(degree)  
     
 
 #### User options ####   NB earlier iterations have a defined high & low energy setting
@@ -54,7 +54,7 @@ print(f'Pitch = {poly}')  # model
 
 
 ### plot of pitch ###
-
+'''
 new_x = np.linspace(degAxis[0], degAxis[-1])
 new_y = poly(new_x)
 plt.plot(degAxis, pitchAx, "o", new_x, new_y, "--")
@@ -62,17 +62,21 @@ plt.xlabel('Bragg')
 plt.ylabel('Pitch')
 plt.show()
 plt.clf()
+'''
+#### Roll model function ####
+polyR = np.poly1d(np.polyfit(degAxis, rollAx, 4)) # int number indicates order of polyfit
+print(f'Roll = {polyR}')  # model
 
-#### Roll linear function ####
-
+'''
 dX = degAxis[7] - degAxis[-3]
 dY = float(pRVals[str(degAxis[7])][1]) - float(pRVals[str(degAxis[-3])][1])
 m = dY/dX
 c = float(pRVals[str(degAxis[7])][1])- (degAxis[7]*m)
 print(f'Roll: y={m}x+{c}')
+'''
 
 ## Plot for Roll ###
-
+'''
 new_x = np.linspace(degAxis[0], degAxis[-1])
 new_y =[m*r+c for r in new_x]
 plt.plot(degAxis, pitchAx, "o", new_x, new_y, "--")
@@ -80,7 +84,7 @@ plt.xlabel('Bragg')
 plt.ylabel('Roll')
 plt.show()
 plt.clf()
-
+'''
 #### get pVs ########
 
 RollSET = epics.PV('BL18I-MO-DCM-01:XTAL2:ROLL')
@@ -104,7 +108,7 @@ dcmBraggRBV = epics.PV('BL18I-MO-DCM-01:BRAGG.RBV')
 #filter_D6 = epics.PV('BL18I-DI-PHDGN-06:A:MP:SELECT') # d6 filter
 
 #### Changes associated with Energy changes   ######
-
+print('monitor changes')
 while True:
     if abs((DegtoEv(dcmBraggTarget.get()) - DegtoEv(dcmBraggRBV.get()))) > eV_feedback_auto:#if dcmEnergyTarget.get() - dcmEnergyRBV.get() > pitchRollChange: ## need to change for Bragg
         moving = 0
@@ -112,9 +116,9 @@ while True:
         fb_y_auto.put(0) 
         sleep(0.5)
         fb_x.put(0)
-        fb_y.put(0) 
-        PitchSET.put(findPitch(float(dcmBraggTarget)))
-        RollSET.put(findRoll(float(dcmBraggTarget))) 
+        fb_y.put(0)
+        RollSET.put(findRoll(float(dcmBraggTarget.get()))) 
+        PitchSET.put(findPitch(float(dcmBraggTarget.get())))
         #coating.put('Silicon(no coat') # Si stripe value
         #filter_D6.put('gap')
         while moving == 0:
