@@ -54,7 +54,7 @@ print(f'Pitch = {poly}')  # model
 
 
 ### plot of pitch ###
-'''
+
 new_x = np.linspace(degAxis[0], degAxis[-1])
 new_y = poly(new_x)
 plt.plot(degAxis, pitchAx, "o", new_x, new_y, "--")
@@ -62,7 +62,7 @@ plt.xlabel('Bragg')
 plt.ylabel('Pitch')
 plt.show()
 plt.clf()
-'''
+
 #### Roll model function ####
 polyR = np.poly1d(np.polyfit(degAxis, rollAx, 4)) # int number indicates order of polyfit
 print(f'Roll = {polyR}')  # model
@@ -76,15 +76,15 @@ print(f'Roll: y={m}x+{c}')
 '''
 
 ## Plot for Roll ###
-'''
+
 new_x = np.linspace(degAxis[0], degAxis[-1])
-new_y =[m*r+c for r in new_x]
-plt.plot(degAxis, pitchAx, "o", new_x, new_y, "--")
+new_y = polyR(new_x)
+plt.plot(degAxis, rollAx, "o", new_x, new_y, "--")
 plt.xlabel('Bragg')
 plt.ylabel('Roll')
 plt.show()
 plt.clf()
-'''
+
 #### get pVs ########
 
 RollSET = epics.PV('BL18I-MO-DCM-01:XTAL2:ROLL')
@@ -134,3 +134,4 @@ while True:
                 sleep(3)
     else:
         sleep(0.1)
+
