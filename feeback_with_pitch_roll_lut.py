@@ -34,23 +34,38 @@ def findPitch(degree):
 def findRoll(degree):
     return polyR(degree)  
     
+''' #linear function 
+dX = degAxis[7] - degAxis[-3]
+dY = float(pRVals[str(degAxis[7])][1]) - float(pRVals[str(degAxis[-3])][1])
+m = dY/dX
+c = float(pRVals[str(degAxis[7])][1])- (degAxis[7]*m)
+print(f'Roll: y={m}x+{c}')
+'''
+
 
 #### User options ####   NB earlier iterations have a defined high & low energy setting
 
 eV_feedback_auto = 50 # if energy change is larger than this the script will check for correct energy setup
+roll_polyfit_order = 4
+pitch_polyfit_order = 3
+lut_file = '/dls_sw/i18/software/gda/config/lookupTables/Si111/crystal2_converter_Si111_2022.txt'
+##################
+
+
+
 
 
 #### load in look up tables and assign coordinates ####
 
-pRVals = coords([j for j in open('/dls_sw/i18/software/gda/config/lookupTables/Si111/crystal2_converter_Si111_2022.txt').readlines()],2)
+pRVals = coords([j for j in open(lut_file).readlines()],2)
 degAxis = [float(q) for q in pRVals]   # X axis
 rollAx = [float(pRVals[w][0]) for w in pRVals]  # Y axis
 pitchAx = [float(pRVals[e][1]) for e in pRVals]  # Yaxis
 
 ##### get Pitch model: polynomial #####
 
-poly = np.poly1d(np.polyfit(degAxis, pitchAx, 2)) # int number indicates order of polyfit
-print(f'Pitch = {poly}')  # model
+poly = np.poly1d(np.polyfit(degAxis, pitchAx, pitch_polyfit_order)) # int number indicates order of polyfit
+print(f'Pitch : {poly}')  # model
 
 
 ### plot of pitch ###
@@ -64,16 +79,8 @@ plt.show()
 plt.clf()
 
 #### Roll model function ####
-polyR = np.poly1d(np.polyfit(degAxis, rollAx, 4)) # int number indicates order of polyfit
-print(f'Roll = {polyR}')  # model
-
-'''
-dX = degAxis[7] - degAxis[-3]
-dY = float(pRVals[str(degAxis[7])][1]) - float(pRVals[str(degAxis[-3])][1])
-m = dY/dX
-c = float(pRVals[str(degAxis[7])][1])- (degAxis[7]*m)
-print(f'Roll: y={m}x+{c}')
-'''
+polyR = np.poly1d(np.polyfit(degAxis, rollAx, roll_polyfit_order)) # int number indicates order of polyfit
+print(f'Roll : {polyR}')  # model
 
 ## Plot for Roll ###
 
@@ -84,6 +91,8 @@ plt.xlabel('Bragg')
 plt.ylabel('Roll')
 plt.show()
 plt.clf()
+
+
 
 #### get pVs ########
 
@@ -108,10 +117,11 @@ dcmBraggRBV = epics.PV('BL18I-MO-DCM-01:BRAGG.RBV')
 #filter_D6 = epics.PV('BL18I-DI-PHDGN-06:A:MP:SELECT') # d6 filter
 
 #### Changes associated with Energy changes   ######
-print('monitor changes')
+print('Monitoring changes for feedback')
 while True:
     if abs((DegtoEv(dcmBraggTarget.get()) - DegtoEv(dcmBraggRBV.get()))) > eV_feedback_auto:#if dcmEnergyTarget.get() - dcmEnergyRBV.get() > pitchRollChange: ## need to change for Bragg
         moving = 0
+        print('Adjusting Pitch & Roll for Energy Move')
         fb_x_auto.put(0)
         fb_y_auto.put(0) 
         sleep(0.5)
