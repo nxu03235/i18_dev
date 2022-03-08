@@ -12,27 +12,93 @@ import epics
 import math
 from time import sleep
 import numpy as np
-from time import sleep
 import matplotlib.pyplot as plt
+from datetime import datetime
+
+def lutTable(eneryPoint):
+    lutList = [5.53,5.974,6.308,7.1,8.121,9.486,11.406,14.312,19.244,23.298,29.63,41.238,44.93,52.282,59.296,64.014,70.339,75]
+    try:
+        print(f'Moving to {lutList[eneryPoint]}')
+        DCMSet.put(lutList[eneryPoint])
+        return eneryPoint + 1
+    except IndexError:
+        print('all energies updated')
+        return False
 
 def DegtoEv(x):
     return 1*1977.58/math.sin(x/(180/math.pi))
 
-def coords(dataLines, skipLine):
+def coords(dataLines, skipLine,openLUT):
     degRollPitch = {}
     count = 0
     for i in dataLines:
-        if count > skipLine:
+        if count >= skipLine:
             degRollPitch[i.split()[0]] = [i.split()[1],i.split()[2]]
         else:
             count += 1
+            if lut_update == True:
+                print(i)
+                if openLUT == None:
+                    openLUT = open(output_lutfile, 'w+')
+                openLUT.write(i)
+    #openLUT.close()
     return degRollPitch
+
+def fbStable(Tol, loops):
+    wait = True
+    count = 0
+    stableC = 0
+    while wait == True:
+        xP = XPlus.get()
+        xM = XMinus.get()
+        yP = YPlus.get()
+        yM = XMinus.get()
+        if abs(yP - yM) < Tol and abs(xP - xM) < Tol:
+            stableC += 1
+            sleep(1)
+            if stableC > 5 :
+                if abs(xP) < 0.005 and abs(yP) < 0.005:
+                    print('WARNING - CURRENT IS LOW BEAM MAY BE OFF')
+                    return False
+                else:
+                    print('AUTOFEEDBACK STABLE')
+                    return True
+        elif count > loops:
+            print(f'FEEDBACK NOT STABLE AFTER {count} LOOPS')
+            return False
+        else:
+            sleep(0.1)
+            count +=1
 
 def findPitch(degree):
     return poly(degree)
     
 def findRoll(degree):
-    return polyR(degree)  
+    return polyR(degree)
+
+def lutUpdate():
+    rollUpD = epics.PV('BL18I-MO-DCM-01:XTAL2:ROLL.RBV')
+    pitchUpD = epics.PV('BL18I-MO-DCM-01:XTAL2:PITCH.RBV')
+    dcmVal = dcmBraggRBV.get()
+    rollVal = rollUpD.get()
+    pitchVal = pitchUpD.get()
+    lutUpFile = open(output_lutfile, 'a')
+    nl ='\n'
+    tab = '\t'
+    lutUpFile.write(f'{dcmVal}{tab}{rollVal}{tab}{pitchVal}{nl}')
+    
+def folderTimeStamp():                                                      
+    dT = []                                                                 
+    for i in str(datetime.now()):                                           
+        try:                                                                
+            i = int(i)                                                      
+            dT.append(str(i))                                               
+        except:                                                             
+            pass                                                            
+    dT = ''.join(dT)                                                        
+    return dT                                                                
+
+    
     
 ''' #linear function 
 dX = degAxis[7] - degAxis[-3]
@@ -43,27 +109,38 @@ print(f'Roll: y={m}x+{c}')
 '''
 
 
-#### User options ####   NB earlier iterations have a defined high & low energy setting
+#### User options for load in file and when to set feedback #######
 
-eV_feedback_auto = 50 # if energy change is larger than this the script will check for correct energy setup
+eV_feedback_auto = 1000 # if energy change is larger than this the script will check for correct energy setup
 roll_polyfit_order = 4
 pitch_polyfit_order = 3
-lut_file = '/dls_sw/i18/software/gda/config/lookupTables/Si111/crystal2_converter_Si111_2022.txt'
+lut_file = '/dls_sw/i18/software/gda/config/lookupTables/Si111/crystal2_converter_Si111.txt'
+
+### User Options in terms of creating updated look up tables and associated options ####
+
+lut_update = False # Do you want to created an updated look up table?
+output_lutfile = '/dls/science/groups/i18/software/i18_development/pitch_roll_update_luts/' ##output directory ##
+slit_tolerance = 0.1 #  differnce in current needs to be lower than this to pass
+attempts = 100 # how many loops to check for stable feedback 1 = 1 second
+overide = False # default to not update luts with low current - to overide change to True
+runLUT = True # Will run and create a new LUT table 
 ##################
 
-
-
-
+if runLUT == True:
+    lut_update = True
 
 #### load in look up tables and assign coordinates ####
-
-pRVals = coords([j for j in open(lut_file).readlines()],2)
+timestamp = folderTimeStamp()
+output_lutfile = f'{output_lutfile}lut_update_{timestamp[:-6]}.txt' 
+pRVals = coords([j for j in open(lut_file).readlines()],2,None )
 degAxis = [float(q) for q in pRVals]   # X axis
 rollAx = [float(pRVals[w][0]) for w in pRVals]  # Y axis
 pitchAx = [float(pRVals[e][1]) for e in pRVals]  # Yaxis
+autoUpdate = False
 
 ##### get Pitch model: polynomial #####
 
+'''
 poly = np.poly1d(np.polyfit(degAxis, pitchAx, pitch_polyfit_order)) # int number indicates order of polyfit
 print(f'Pitch : {poly}')  # model
 
@@ -98,6 +175,7 @@ plt.clf()
 
 RollSET = epics.PV('BL18I-MO-DCM-01:XTAL2:ROLL')
 PitchSET = epics.PV('BL18I-MO-DCM-01:XTAL2:PITCH')
+DCMSet = epics.PV('BL18I-MO-DCM-01:BRAGG')
 
 rollNotMoving = epics.PV('BL18I-MO-DCM-01:XTAL2:ROLL.DMOV')
 pitchNotMoving = epics.PV('BL18I-MO-DCM-01:XTAL2:PITCH.DMOV')
@@ -116,9 +194,19 @@ dcmBraggRBV = epics.PV('BL18I-MO-DCM-01:BRAGG.RBV')
 #coating = epics.PV('BL18I-OP-HRM-01:MPY:SELECT') # Stripe on HRM
 #filter_D6 = epics.PV('BL18I-DI-PHDGN-06:A:MP:SELECT') # d6 filter
 
+## S2 Slit Values ##
+XPlus = epics.PV('BL18I-AL-SLITS-02:X:PLUS:I')
+XMinus = epics.PV('BL18I-AL-SLITS-02:X:MINUS:I')
+YPlus = epics.PV('BL18I-AL-SLITS-02:Y:PLUS:I')
+YMinus = epics.PV('BL18I-AL-SLITS-02:Y:MINUS:I')
+energyNum = 0
 #### Changes associated with Energy changes   ######
 print('Monitoring changes for feedback')
 while True:
+    if runLUT == True:
+        energyNum = lutTable(energyNum)
+        if energyNum == False:
+            runLUT = False
     if abs((DegtoEv(dcmBraggTarget.get()) - DegtoEv(dcmBraggRBV.get()))) > eV_feedback_auto:#if dcmEnergyTarget.get() - dcmEnergyRBV.get() > pitchRollChange: ## need to change for Bragg
         moving = 0
         print('Adjusting Pitch & Roll for Energy Move')
@@ -137,11 +225,20 @@ while True:
                 sleep(1)
             else:
                 moving = 1
-                print('PASSING CONTROL TO THE AUTO FEEDBACK')
+                print('CHECKING STATUS OF FEEDBACK')
                 sleep(1)
                 fb_x_auto.put(1)
                 fb_y_auto.put(1)
                 sleep(3)
+                updateOk = fbStable(slit_tolerance, attempts)
+                if lut_Update == True:
+                    if updateOk == True:
+                        lutUpdate()
+                    else:
+                        print('LUT not updated due to low current - if you want to overide change overide to True')
+                        if overide == True:
+                            lutUpdate()
     else:
         sleep(0.1)
 
+'''
