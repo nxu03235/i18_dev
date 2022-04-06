@@ -14,9 +14,13 @@ from time import sleep
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
+from scipy.interpolate import interp1d
+
+def braggToPerp(bragg):
+    return 12.71666138/math.cos(bragg/(180/math.pi)) - 0.35687044
 
 def lutTable(eneryPoint):
-    lutList = [5.53,5.974,6.308,7.1,8.121,9.486,11.406,14.312,19.244,23.298,29.63,41.238,44.93,52.282,59.296,64.014,70.339,75]
+    lutList = [5.53,5.974,6.308,7.1,8.121,9.486,11.406,14.312,19.244,23.298,29.63,41.238,44.93,52.282,59.296,64.014,70.339,75] #Bragg lookup values
     try:
         print(f'Moving to {lutList[eneryPoint]}')
         DCMSet.put(lutList[eneryPoint])
@@ -70,11 +74,17 @@ def fbStable(Tol, loops):
             sleep(0.1)
             count +=1
 
-def findPitch(degree):
-    return poly(degree)
+def findPitch(degree, model):
+    if model == True:
+        return sply(degree)
+    else:
+        return poly(degree)
     
-def findRoll(degree):
-    return polyR(degree)
+def findRoll(degree, model):
+    if model == True:
+        return splyR(degree)
+    else:
+        return polyR(degree)
 
 def lutUpdate():
     rollUpD = epics.PV('BL18I-MO-DCM-01:XTAL2:ROLL.RBV')
@@ -98,36 +108,36 @@ def folderTimeStamp():
     dT = ''.join(dT)                                                        
     return dT                                                                
 
-    
-    
-''' #linear function 
-dX = degAxis[7] - degAxis[-3]
-dY = float(pRVals[str(degAxis[7])][1]) - float(pRVals[str(degAxis[-3])][1])
-m = dY/dX
-c = float(pRVals[str(degAxis[7])][1])- (degAxis[7]*m)
-print(f'Roll: y={m}x+{c}')
-'''
 
-
-#### User options for load in file and when to set feedback #######
+##### USER OPTION --> for load in file and when to set feedback #######
 
 eV_feedback_auto = 1000 # if energy change is larger than this the script will check for correct energy setup
-roll_polyfit_order = 4
-pitch_polyfit_order = 3
 lut_file = '/dls_sw/i18/software/gda/config/lookupTables/Si111/crystal2_converter_Si111.txt'
 
-### User Options in terms of creating updated look up tables and associated options ####
+##### USER OPTION --> Options for creating updated look up tables ####
 
-lut_update = False # Do you want to created an updated look up table?
+runLUT = False # Will run and create a new LUT table 
 output_lutfile = '/dls/science/groups/i18/software/i18_development/pitch_roll_update_luts/' ##output directory ##
 slit_tolerance = 0.1 #  differnce in current needs to be lower than this to pass
 attempts = 100 # how many loops to check for stable feedback 1 = 1 second
 overide = False # default to not update luts with low current - to overide change to True
-runLUT = True # Will run and create a new LUT table 
-##################
 
-if runLUT == True:
-    lut_update = True
+##### USER OPTION --> Spline or Polynomial #####
+
+spline = True # if spline funstion set as True otherwise False for polynomial
+
+roll_polyfit_order = 4
+pitch_polyfit_order = 3
+
+
+##############################END####################################
+
+
+
+
+
+
+##### GETTING MODEL & PLOTS #####
 
 #### load in look up tables and assign coordinates ####
 timestamp = folderTimeStamp()
@@ -138,17 +148,21 @@ rollAx = [float(pRVals[w][0]) for w in pRVals]  # Y axis
 pitchAx = [float(pRVals[e][1]) for e in pRVals]  # Yaxis
 autoUpdate = False
 
-##### get Pitch model: polynomial #####
+##### get Pitch model #####
 
-'''
-poly = np.poly1d(np.polyfit(degAxis, pitchAx, pitch_polyfit_order)) # int number indicates order of polyfit
-print(f'Pitch : {poly}')  # model
-
+if spline == True:
+    sply = interp1d(degAxis, pitchAx)
+else:
+    poly = np.poly1d(np.polyfit(degAxis, pitchAx, pitch_polyfit_order)) # int number indicates order of polyfit
+    print(f'Pitch : {poly}')  # model
 
 ### plot of pitch ###
 
 new_x = np.linspace(degAxis[0], degAxis[-1])
-new_y = poly(new_x)
+if spline == True:
+    new_y = sply(new_x)
+else:
+    new_y = poly(new_x)
 plt.plot(degAxis, pitchAx, "o", new_x, new_y, "--")
 plt.xlabel('Bragg')
 plt.ylabel('Pitch')
@@ -156,21 +170,26 @@ plt.show()
 plt.clf()
 
 #### Roll model function ####
-polyR = np.poly1d(np.polyfit(degAxis, rollAx, roll_polyfit_order)) # int number indicates order of polyfit
-print(f'Roll : {polyR}')  # model
+if spline == True:
+    splyR = interp1d(degAxis, rollAx)
+else:
+    polyR = np.poly1d(np.polyfit(degAxis, rollAx, roll_polyfit_order)) # int number indicates order of polyfit
+    print(f'Roll : {polyR}')  # model
 
 ## Plot for Roll ###
 
 new_x = np.linspace(degAxis[0], degAxis[-1])
-new_y = polyR(new_x)
+if spline == True:
+    new_y = splyR(new_x)
+else:
+    new_y = polyR(new_x)
 plt.plot(degAxis, rollAx, "o", new_x, new_y, "--")
 plt.xlabel('Bragg')
 plt.ylabel('Roll')
 plt.show()
 plt.clf()
 
-
-
+'''
 #### get pVs ########
 
 RollSET = epics.PV('BL18I-MO-DCM-01:XTAL2:ROLL')
@@ -199,7 +218,12 @@ XPlus = epics.PV('BL18I-AL-SLITS-02:X:PLUS:I')
 XMinus = epics.PV('BL18I-AL-SLITS-02:X:MINUS:I')
 YPlus = epics.PV('BL18I-AL-SLITS-02:Y:PLUS:I')
 YMinus = epics.PV('BL18I-AL-SLITS-02:Y:MINUS:I')
+
 energyNum = 0
+lut_update = False # For testing Do you want to create an updated look up table while running? 
+if runLUT == True:
+    lut_update = True
+
 #### Changes associated with Energy changes   ######
 print('Monitoring changes for feedback')
 while True:
@@ -215,8 +239,8 @@ while True:
         sleep(0.5)
         fb_x.put(0)
         fb_y.put(0)
-        RollSET.put(findRoll(float(dcmBraggTarget.get()))) 
-        PitchSET.put(findPitch(float(dcmBraggTarget.get())))
+        RollSET.put(findRoll(float(dcmBraggTarget.get())), spline) 
+        PitchSET.put(findPitch(float(dcmBraggTarget.get())),spline)
         #coating.put('Silicon(no coat') # Si stripe value
         #filter_D6.put('gap')
         while moving == 0:
@@ -231,7 +255,7 @@ while True:
                 fb_y_auto.put(1)
                 sleep(3)
                 updateOk = fbStable(slit_tolerance, attempts)
-                if lut_Update == True:
+                if lut_update == True:
                     if updateOk == True:
                         lutUpdate()
                     else:
@@ -241,4 +265,15 @@ while True:
     else:
         sleep(0.1)
 
+'''
+
+
+
+''' 
+#linear function 
+dX = degAxis[7] - degAxis[-3]
+dY = float(pRVals[str(degAxis[7])][1]) - float(pRVals[str(degAxis[-3])][1])
+m = dY/dX
+c = float(pRVals[str(degAxis[7])][1])- (degAxis[7]*m)
+print(f'Roll: y={m}x+{c}')
 '''
